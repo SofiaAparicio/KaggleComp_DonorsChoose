@@ -1,0 +1,5 @@
+# file: ~/.gitignore
+.DS_Store
+*.csv
+*.bin
+.idea
