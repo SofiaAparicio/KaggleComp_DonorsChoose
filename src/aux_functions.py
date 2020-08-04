@@ -13,9 +13,13 @@ import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
 from datetime import datetime
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder
 from geopy.geocoders import Nominatim
 from collections import Counter
+import category_encoders as ce
+from sklearn.metrics import f1_score, balanced_accuracy_score, roc_curve
+
+
 
 
 # ---------- Handle Text Data
@@ -180,73 +184,73 @@ def custom_loss(x,y):
 
 # ---------- Cleaning datasets
 
-def encodeColumn(data, col_name):
-    # creating instance of labelencoder
-    labelencoder = LabelEncoder()
+def encodeTarget(data, target, col_names):
+    # creating an instance of target encoder
+    target_encoder = ce.TargetEncoder(cols=col_names, min_samples_leaf=1, return_df=True,
+                                      drop_invariant=False)
+
+    target_encoder.fit(data, target)
+    data = target_encoder.transform(data)
+
+    return data, target_encoder
+
+
+def encodeOrdinal(data, col_names):
+    # creating instance of encoder
+    ordinal_encoder = OrdinalEncoder()
 
     # Assigning numerical values and storing in another column
-    data[col_name] = labelencoder.fit_transform(data[col_name])
-    return data, labelencoder
+    ordinal_encoder.fit(data[col_names])
+    data[col_names] = ordinal_encoder.transform(data[col_names])
+    return data, ordinal_encoder
 
 
-def encodeDataset(projects, encoders_test=None):
+
+def encodeDataset(projects, target=None, encoders_test=None):
 
     # Replace NaN values with students_reached column mode
     projects['students_reached'].fillna(projects['students_reached'].mode()[0], inplace=True)
 
+
     if encoders_test == None:
-        projects, encoder_school_state = encodeColumn(projects, 'school_state')
-        projects, encoder_teacher_acctid = encodeColumn(projects, 'teacher_acctid')
-        projects, encoder_schoolid = encodeColumn(projects, 'schoolid')
-        projects, encoder_school_ncesid = encodeColumn(projects, 'school_ncesid')
-        projects, encoder_school_city = encodeColumn(projects, 'school_city')
-        projects, encoder_school_metro = encodeColumn(projects, 'school_metro')
-        projects, encoder_teacher_prefix = encodeColumn(projects, 'teacher_prefix')
 
-        projects, encoder_secondary_focus_subject = encodeColumn(projects, 'secondary_focus_subject')
-        projects, encoder_secondary_focus_area = encodeColumn(projects, 'secondary_focus_area')
+        projects, ordinal_encoder = encodeOrdinal(projects, ['poverty_level', 'grade_level'])
 
-        projects, encoder_primary_focus_subject = encodeColumn(projects, 'primary_focus_subject')
-        projects, encoder_primary_focus_area = encodeColumn(projects, 'primary_focus_area')
+        projects, target_encoder = encodeTarget(projects, target, ['school_state', 'teacher_acctid',
+                                                           'schoolid', 'school_city',
+                                                           'school_metro', 'teacher_prefix', 'secondary_focus_subject',
+                                                           'secondary_focus_area', 'primary_focus_subject',
+                                                           'primary_focus_area', 'resource_type', 'vendor_name'])
 
-        projects, encoder_resource_type = encodeColumn(projects, 'resource_type')
-        projects, encoder_poverty_level = encodeColumn(projects, 'poverty_level')
-        projects, encoder_grade_level = encodeColumn(projects, 'grade_level')
+        # regarding the labels on the test set that are only seen once, the encoder will give them a NaN value
+        # tranform the NaN values to 0
+        projects = projects.replace(np.nan, 0, regex=True)
 
-        projects, encoder_vendor_name = encodeColumn(projects, 'vendor_name')
-
-        return projects, [encoder_school_state, encoder_teacher_acctid, encoder_schoolid, encoder_school_ncesid,
-                          encoder_school_city, encoder_school_metro, encoder_teacher_prefix,
-                          encoder_secondary_focus_subject, encoder_secondary_focus_area,
-                          encoder_primary_focus_subject, encoder_primary_focus_area,
-                          encoder_resource_type, encoder_poverty_level, encoder_grade_level,
-                          encoder_vendor_name]
+        return projects, [ordinal_encoder, target_encoder]
 
 
     else:
 
-        projects['school_state'] = encoders_test[0].transform(projects['school_state'])
-        projects['teacher_acctid'] = encoders_test[1].transform(projects['teacher_acctid'])
-        projects['schoolid'] = encoders_test[2].transform(projects['schoolid'])
-        projects['school_ncesid'] = encoders_test[3].transform(projects['school_ncesid'])
-        projects['school_city'] = encoders_test[4].transform(projects['school_city'])
-        projects['school_metro'] = encoders_test[5].transform(projects['school_metro'])
-        projects['teacher_prefix'] = encoders_test[6].transform(projects['teacher_prefix'])
-        projects['secondary_focus_subject'] = encoders_test[7].transform(projects['secondary_focus_subject'])
-        projects['secondary_focus_area'] = encoders_test[8].transform(projects['secondary_focus_area'])
-        projects['primary_focus_subject'] = encoders_test[9].transform(projects['primary_focus_subject'])
-        projects['primary_focus_area'] = encoders_test[10].transform(projects['primary_focus_area'])
-        projects['resource_type'] = encoders_test[11].transform(projects['resource_type'])
-        projects['poverty_level'] = encoders_test[12].transform(projects['poverty_level'])
-        projects['grade_level'] = encoders_test[13].transform(projects['grade_level'])
+        projects[['poverty_level', 'grade_level']] = encoders_test[0].transform(projects[['poverty_level', 'grade_level']])
+        projects = encoders_test[1].transform(projects)
 
-        projects['vendor_name'] = encoders_test[14].transform(projects['vendor_name'])
+        # regarding the unseen labels on the test set, the encoder will give them a NaN value
+        # tranform the NaN values to 0
+        projects = projects.replace(np.nan, 0, regex=True)
 
         return projects
 
 
+def classificationReport(validation_y, validation_random_under_Predict):
+    f1score_random_under = f1_score(validation_y['is_exciting'], validation_random_under_Predict, average='weighted')
 
+    balaccu_random_under = balanced_accuracy_score(validation_y['is_exciting'], validation_random_under_Predict)
 
+    # Evaluation metrics
+    print('Scores are:')
+
+    print('F1 score : {} '.format(f1score_random_under))
+    print('Balanced Accuracy score : {} '.format(balaccu_random_under))
 
 
 
