@@ -136,7 +136,9 @@ As final model, I combined three models into a Voting classifier: RUSBoost Class
 
 
 ## Geting Started
-    pip install requirements.txt
+    conda create --name env python=3.7.6
+    pip install --upgrade pip
+    pip install -r requirements.txt
 
 ## Resources
 
